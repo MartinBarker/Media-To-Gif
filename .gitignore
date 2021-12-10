@@ -1,0 +1,14 @@
+*.avi
+*.mp4
+*.mkv
+*.png
+*.gif
+*.pyc
+.env
+.vscode
+.DS_Store
+__pycache__
+env/
+screencaps/
+config.cfg
+pip-selfcheck.json

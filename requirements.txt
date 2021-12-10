@@ -1,0 +1,10 @@
+urwid
+pysrt
+numpy
+pillow
+twython
+python-tumblpy
+imageio
+os
+random
+uuid
