@@ -2,7 +2,7 @@ urwid
 pysrt
 numpy
 pillow
-twython
+twython 
 python-tumblpy
 imageio
 os

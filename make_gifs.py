@@ -154,7 +154,7 @@ def make_gif(
             frame_duration=FRAME_DURATION, 
             font_path=FONT_PATH,
             font_size=FONT_SIZE
-            ):
+            ): 
     """
     This function relies on some global variables that need to be set
     before you can run the function.
