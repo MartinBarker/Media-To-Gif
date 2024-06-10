@@ -17,8 +17,8 @@ from PIL import Image, ImageFont, ImageDraw
 
 CONFIG_FILE = "config.cfg"
 PALLETSIZE = 256  # number of colors used in the gif, rounded to a power of two
-WIDTH = 720  # of the exports/gif, aspect ratio 2.35:1
-HEIGHT = 416  # of the exports/gif, aspect ratio 2.35:1
+WIDTH = 1280  # of the exports/gif, aspect ratio 2.35:1
+HEIGHT = 536  # of the exports/gif, aspect ratio 2.35:1
 FRAME_DURATION = 0.1  # how long a frame/image is displayed
 PADDING = [0]  # seconds to widen the capture-window
 DITHER = 2  # only every <dither> image will be used to generate the gif

@@ -8,3 +8,6 @@ imageio
 os
 random
 uuid
+imageio
+pysrt
+pillow==9.5.0
