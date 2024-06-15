@@ -5,9 +5,9 @@ pillow
 twython 
 python-tumblpy
 imageio
-os
 random
 uuid
 imageio
 pysrt
 pillow==9.5.0
+ffmpeg

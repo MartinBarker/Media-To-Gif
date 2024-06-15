@@ -1,5 +1,32 @@
 Forked from https://github.com/LindseyB/starwars-dot-gif
 
+Run with linux:
+`python make_gifs.py `
+
+To generate a gif for every movie/srt file combo.
+
+### Setup Python3 virtualenv on linux:
+`pip install virtualenv`
+
+`python3 -m virtualenv venv`
+
+`source venv/bin/activate`
+
+`pip install -r requirements.txt`
+
+`pip install pysrt`
+
+`pip install imageio`
+
+`pip install pillow==9.5.0`
+
+Once finished, leave virtualenv by running command: `deactivate`
+
+### Create single gif:
+`python3 make_gifs.py`
+
+----------------------------------------------
+
 #to run locally:
 1. Setup auth values in config.cfg file
 2. Source Python virtual env and run 
