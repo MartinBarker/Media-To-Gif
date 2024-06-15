@@ -3,7 +3,7 @@ Forked from https://github.com/LindseyB/starwars-dot-gif
 Run with linux:
 `python make_gifs.py `
 
-To generate a gif for every movie/srt file combo.
+To generate a gif for every movie/srt file combo. 
 
 ### Setup Python3 virtualenv on linux:
 `pip install virtualenv`

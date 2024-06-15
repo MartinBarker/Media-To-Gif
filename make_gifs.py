@@ -437,7 +437,7 @@ def make_gif_old(
     print('done.')
     return text
 
-
+ 
 
 def make_gif_for_all_quotes(
         movie_slug,
