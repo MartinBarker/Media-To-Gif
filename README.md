@@ -1,12 +1,10 @@
-# Takes movie file and subtitles file as input
-# Run script to go through movie and turn every 5 seconds into a gif, if the 5 seconds includes a quote, generate a gif of that full quote instead, and overlay subtitles onto the gif.
-# Downsample, resize, change colors and framerate of gif to make it as close to 4mb as possible.
-# Save gif with filename formatted like so: `${mediaName}-Start[${startTime}]-End[${endTime}]-Quote[${quote}].gif` where the vars are like so:
-    mediaName: Name of movie/Tv show, ex: '28 days later'
-    startTime: Start time formatted like so: hh-mm-ss
-    endTime: End time formatted like so: hh-mm-ss
-    quote: quote (if any) on the screen, max 30 characters, sanitized to be only text no other chars then a-z and 0-9.
+# Media-To-Gif
 
+This script takes a movie file and subtitles file as input. It processes the movie to generate GIFs every 5 seconds. If a 5-second interval includes a quote, it generates a GIF of that full quote instead and overlays subtitles onto the GIF. The script downsamples, resizes, changes colors, and adjusts the framerate of the GIF to make it as close to 4MB as possible. The GIF is saved with a filename formatted as `${mediaName}-Start[${startTime}]-End[${endTime}]-Quote[${quote}].gif`, where the variables are:
+- `mediaName`: Name of the movie/TV show, e.g., '28 days later'
+- `startTime`: Start time formatted as `hh-mm-ss`
+- `endTime`: End time formatted as `hh-mm-ss`
+- `quote`: Quote (if any) on the screen, max 30 characters, sanitized to be only text with no other characters than a-z and 0-9.
 
 ## Setup Instructions
 
@@ -82,7 +80,7 @@ The script requires `ffmpeg` to be installed on your system. Follow the instruct
     python make_gifs.py --movie /path/to/movie.mp4 --subtitles /path/to/subtitles.srt --output /mnt/x/28dayslatergifs --interval 5 --startTime 01:22:23
     ```
 Example:
-```
+```sh
 python make_gifs.py --movie "media/28 Days Later (2002)/28.Days.Later.2002.720p.mp4" --subtitles "media/28 Days Later (2002)/28.Days.Later.2002.Subtitles.srt" --output /mnt/x/28dayslatergifs --interval 5 --startTime 01:22:23 --maxFilesize 15mb
 ```
 
