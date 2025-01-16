@@ -12,5 +12,5 @@ env/
 screencaps/
 config.cfg
 pip-selfcheck.json
-
 venv/
+media/

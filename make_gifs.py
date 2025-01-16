@@ -19,13 +19,11 @@ import pysrt
 from PIL import Image, ImageDraw, ImageFont
 import imageio
 from numpy import array
-
 from numpy import array
 from PIL import Image, ImageFont, ImageDraw
 
 # defaults
 
-CONFIG_FILE = "config.cfg"
 PALLETSIZE = 256  # number of colors used in the gif, rounded to a power of two
 WIDTH = 1280  # of the exports/gif, aspect ratio 2.35:1
 HEIGHT = 536  # of the exports/gif, aspect ratio 2.35:1
@@ -37,36 +35,8 @@ SCREENCAP_PATH = os.path.join(os.path.dirname(__file__), "screencaps")
 FONT_PATH = "fonts/DejaVuSansCondensed-BoldOblique.ttf"
 FONT_SIZE = 16
 
-
-def check_config(config_file):
-    if not os.path.exists(config_file):
-        print('Config file not found: {}'.format(config_file))
-        exit(1)
-
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    config.sections()
-
-    try:
-        ffmpeg_path = config.get("general", "ffmpeg_path")
-        vlc_path = config.get("general", "vlc_path")
-        movies = [movie_sanity_check(m) for m in ast.literal_eval(
-            config.get('general', 'videos')) if movie_sanity_check(m)]
-    except configparser.NoOptionError as ex:
-        print('Option missing from config-file: {}'.format(ex.message))
-        exit(1)
-    except SyntaxError as err:
-        print(f"{err.text}: on line {err.lineno}, character {err.offset} in {err.filename}")
-        print('This might be wrong syntax in the videos-setting')
-        exit(1)
-    slugs = [movie['slug'] for movie in movies]
-
-    if not movies:
-        print('Your config does not contain any valid movies')
-        exit(1)
-
-    return (ffmpeg_path, vlc_path, movies, slugs)
-
+# Add ffmpeg_path as a global variable
+ffmpeg_path = "ffmpeg"  # Assuming ffmpeg is in the system PATH
 
 def movie_sanity_check(movie):
     # see if video_path is set
@@ -93,7 +63,7 @@ def movie_sanity_check(movie):
 
 def get_movie_by_slug(slug, movies):
     for movie in movies:
-        if movie['slug'] == slug:
+        if (movie['slug'] == slug):
             return movie
     print('movie with slug "{}" not found in config.'.format(slug))
     exit(1)
@@ -106,25 +76,25 @@ def striptags(data):
     return p.sub('', data)
 
 
-def draw_text(draw, x, y, text, font):
-    """Draws a white text with a black outline.
+def draw_text(draw, image_width, image_height, text, font):
+    """Draws text within the image bounds."""
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
+    
+    # Ensure the text always fits within the image width
+    x = max(0, min((image_width - text_width) // 2, image_width - text_width))
+    # Position text at the bottom of the image but above the lower edge with a margin
+    y = image_height - text_height - 20  # Add a margin of 20 pixels
+    
+    # Draw shadow for better visibility
+    draw.text((x-1, y), text, font=font, fill="black")
+    draw.text((x+1, y), text, font=font, fill="black")
+    draw.text((x, y-1), text, font=font, fill="black")
+    draw.text((x, y+1), text, font=font, fill="black")
+    # Draw the main text
+    draw.text((x, y), text, font=font, fill="white")
 
-    Arguments:
-        draw {PIL.Image} -- The image to draw in
-        x {int} -- x-coordinate to start drawing in
-        y {int} -- y-coordinate to start drawing in
-        text {str} -- Text to render (please verify font-sizing)
-        font {ImageFont.Font} -- Font to render text in
-    """
-
-    #  black outline
-    draw.text((x-1, y), text, (0, 0, 0), font=font)
-    draw.text((x+1, y), text, (0, 0, 0), font=font)
-    draw.text((x, y-1), text, (0, 0, 0), font=font)
-    draw.text((x, y+1), text, (0, 0, 0), font=font)
-
-    #  white text
-    draw.text((x, y), text, (255, 255, 255), font=font)
 
 def getDetails():
     # Get location of video file and subtitles
@@ -150,573 +120,157 @@ def getDetails():
     #gifFilename = "sopranos_gif_" + str(uuid.uuid4()) + ".gif"
     #respText = make_gif_new(randomEpisodeLocation, subsLocation)
 
-def make_gif_old(
-        movie_slug, 
-        sub_index=[-1], 
-        custom_subtitle=[""], 
-        quote=True,
-        frames=0, 
-        filename="star_wars2.gif", 
-        dither=DITHER,
-        padding=PADDING, 
-        palletsize=PALLETSIZE, 
-        width=WIDTH, 
-        height=HEIGHT,
-        frame_duration=FRAME_DURATION, 
-        font_path=FONT_PATH,
-        font_size=FONT_SIZE
-    ):
-    """
-    This function relies on some global variables that need to be set
-    before you can run the function.
-    Namely: movies, ffmpeg_path, vlc_path.
-
-    This function will the pull frames for the selected movie and render
-    subtitles over them to
-
-    Arguments:
-        movie_slug {[str]} -- Select the movie(s) to pull a gif from, this must
-                              be defined in the config-file.
-
-    Keyword Arguments:
-        sub_index [{int}] -- List of indexes of the subtitle "lines" to use
-                             (default: {[-1]})
-        custom_subtitle [{str}] -- Replace the selected quote with your own
-                                   text (default: {[""]})
-        quote {bool} -- False will export the time-slot between the selected
-                        index and next index in the subtitle file.
-                        True exports the timespan given by the index
-                        (default: {True})
-        frames {int} -- Only export <frames> images to the gif (default: {0})
-        filename {str} -- Name to safe the gif under
-                          (default: {"star_wars.gif"})
-        dither {int} -- Every <dither> image is used in the gif (2 means every
-                        second exported image is used) (default: {2})
-        padding {[int]} -- Seconds to add at the end and beginning of the gif
-                           (default: {[0]})
-        palletsize {int} -- Palletsize, will be rounded to the nearest power
-                            of two (default: {256})
-        width {int} -- Width of the gif to generate (height does not scale to
-                       ratio!) (default: {512})
-        height {int} -- Height of the gif to generate (width does not scale to
-                       ratio!) (default: {256})
-        frame_duration {float} -- Seconds each frame will be shown in the gif.
-                                  (default: {0.1})
-        font_path {str} -- Font to render the subtitle in (default:
-                           {'fonts/DejaVuSansCondensed-BoldOblique.ttf'})
-        font_size {str} -- Font-size to render in (important of you change the
-                           width/height of the gif) (default: {16})
-
-        Raises:
-            Exception -- If a required file is not found
-
-        Returns:
-            [str] -- The quoted text you selected or input.
-
-    """
-
-    # if this function is not called via commandline we need to parse movies
-    (ffmpeg_path, vlc_path, movies, slugs) = check_config(CONFIG_FILE)
-    
-    # get media info
-    movie = get_movie_by_slug(movie_slug, movies)
-    
-    # make sure movie is present
-    print("make_gifs() moviepath = ", movie['movie_path'])
-    if not os.path.exists(movie['movie_path']):
-        raise Exception('Movie not found.')
-
-    # make sure subtitles are present
-    print("make_gifs() subtitlesPath = ", movie['subtitle_path'])
-    if not os.path.exists(movie['subtitle_path']):
-        raise Exception('Subtitles not found.')
-
-    # cleanup from previous runs (if any)
-    if not os.path.exists(SCREENCAP_PATH):
-        os.makedirs(SCREENCAP_PATH)
-
-    # these are the frames that will be exported
-    images = []
-    meta = []
-
-    # read in the quotes for the selected movie
-    subs = pysrt.open(movie['subtitle_path'])
-    font = ImageFont.truetype(font_path, font_size)
-
-    loop = 0
-    for working_index in sub_index:
-        # delete the contents of the screencap path
-        file_list = os.listdir(SCREENCAP_PATH)
-        for file_name in file_list:
-            os.remove(os.path.join(SCREENCAP_PATH, file_name))
-
-        # see of we have custom quotes
-        if len(custom_subtitle) > loop:
-            working_subtitle = custom_subtitle[loop]
-        else:
-            working_subtitle = ""
-
-        # get padding from array
-        if isinstance(padding, (int, float)):
-            padding_left = padding
-            padding_right = padding
-        elif len(padding) == 2:
-            padding_left = padding[0]
-            padding_right = padding[1]
-        elif len(padding) >= (2 * loop + 2):
-            padding_left = padding[2 * loop]
-            padding_right = padding[2 * loop + 1]
-        elif len(padding) >= (2 * loop + 1):
-            padding_left = padding[2 * loop]
-            padding_right = padding[2 * loop]
-        else:
-            # this should not happen
-            padding_left = 0
-            padding_right = 0
-
-        # if no quote selected, set a random one
-        if working_index < 1:
-            working_index = random.randint(1, len(subs))
-        if working_index > len(subs)+1:
-            print('subtitle index not available')
-            exit(1)
-
-        subtitle = subs[working_index-1]
-        next_subtitle = subs[working_index]
-
-        # setting text to "subtitle" with
-        if len(working_subtitle) > 0:
-            text = [working_subtitle]
-        else:
-            text = striptags(subtitle.text).split("\n")
-
-        print('generating images from video ...')
-
-        # Both ffmpeg and vlc write a lot of stuff to stdout, supressing
-        FNULL = open(os.devnull, 'w')
-
-        if ffmpeg_path:
-            print('using ffmpeg.')
-            # ffmpeg
-            # getting timespans (begin and duration)
-            if quote:
-                start = subtitle.start - pysrt.SubRipTime(0, 0, padding_left)
-                diff = subtitle.end - subtitle.start
-            else:
-                start = subtitle.end - pysrt.SubRipTime(0, 0, padding_left)
-                diff = next_subtitle.start - subtitle.end
-
-            duration = str(diff.seconds +
-                        (diff.milliseconds*0.001) +
-                        padding_right)
-            start = str(start).replace(',', '.')
-
-            # calling ffmpeg (or whatever binary talks in ffmpeg-options) to generate screencaps
-            subprocess.call([
-                ffmpeg_path,
-                '-ss',
-                start,
-                '-i',
-                movie['movie_path'],
-                '-t',
-                duration,
-                '-s',
-                '{}x{}'.format(width, height),
-                SCREENCAP_PATH + '/thumb%05d.png'],
-                stdout=FNULL, stderr=subprocess.STDOUT)
-        else:
-            # vlc
-            print('using vlc')
-            # getting timespans
-            if quote:
-                start = ((3600 * subtitle.start.hours) +
-                        (60 * subtitle.start.minutes) +
-                        subtitle.start.seconds -
-                        padding_left +
-                        (0.001*subtitle.start.milliseconds))
-                end = ((3600 * subtitle.end.hours) +
-                    (60 * subtitle.end.minutes) +
-                    subtitle.end.seconds +
-                    padding_right +
-                    (0.001*subtitle.end.milliseconds))
-            else:
-                start = ((3600 * subtitle.end.hours) +
-                        (60 * subtitle.end.minutes) +
-                        subtitle.end.seconds +
-                        (0.001*subtitle.end.milliseconds))
-                end = ((3600 * next_subtitle.start.hours) +
-                    (60 * next_subtitle.start.minutes) +
-                    next_subtitle.start.seconds +
-                    (0.001*next_subtitle.start.milliseconds))
-            # calling vlc
-            subprocess.call([
-                vlc_path,
-                '-Idummy',
-                '--video-filter',
-                'scene',
-                '-Vdummy',
-                '--no-audio',
-                '--scene-height=256',
-                '--scene-width=512',
-                '--scene-format=png',
-                '--scene-ratio=1',
-                '--start-time='+str(start),
-                '--stop-time='+str(end),
-                '--scene-prefix=thumb',
-                '--scene-path='+SCREENCAP_PATH,
-                movie['movie_path'],
-                'vlc://quit'
-            ], stdout=FNULL, stderr=subprocess.STDOUT)
-
-        # Generating images done
-        file_names = sorted((fn for fn in os.listdir(SCREENCAP_PATH)))
-        if not file_names:
-            print('no images generated, aborting.')
-            return
-        print('generated {} images.'.format(len(file_names)))
-
-        for f in file_names[::dither]:
-            try:
-                image = Image.open(os.path.join(SCREENCAP_PATH, f))
-                draw = ImageDraw.Draw(image)
-                image_size = image.size
-
-                # deal with multi-line quotes
-                try:
-                    if len(text) == 2:
-                        # at most 2?
-                        text_size = font.getsize(text[0])
-                        x = (image_size[0]/2) - (text_size[0]/2)
-                        y = image_size[1] - (2*text_size[1]) - 8  # padding
-                        draw_text(draw, x, y, text[0], font)
-
-                        text_size = font.getsize(text[1])
-                        x = (image_size[0]/2) - (text_size[0]/2)
-                        y += text_size[1]
-                        draw_text(draw, x, y, text[1], font)
-                    else:
-                        text_size = font.getsize(text[0])
-                        x = (image_size[0]/2) - (text_size[0]/2)
-                        y = image_size[1] - text_size[1] - 8  # padding
-                        draw_text(draw, x, y, text[0], font)
-                except NameError:
-                    pass
-                # do nothing.
-
-                # if not all black?
-                if image.getbbox():
-                    # add it to the array
-                    images.append(array(image))
-                    if frames != 0 and len(images) == frames:
-                        # got all the frames we need - all done
-                        break
-                else:
-                    print('all black frame found.')
-            except IOError:
-                print('empty frame found.')
-        meta.append('{}: "{}" (index {}, {})'.format(
-            movie['title'], '\n'.join(text), working_index, subtitle.start))
-        # this is so we can have multiple quotes and paddings and stuff
-        loop += 1
-
-    # Create gif filename 
-    print('movie_slug = ', movie_slug)
-    milliseconds = round(time.time() * 1000)
-    filename = f"{movie_slug} - {milliseconds}.gif"
-
-    # Create gif
-    print('selected {} images.'.format(len(images)))
-    print('generating gif with filename = ', filename)
-    imageio.mimsave(filename,
-                    images,
-                    palettesize=palletsize,
-                    duration=frame_duration,
-                    subrectangles=False)
-    print('generated gif.')
-    print('Used:\n{}'.format('\n'.join(meta)))
-    print('done.')
-    return text
-
- 
-
-def make_gif_for_all_quotes(
-        movie_slug,
-        sub_index=[-1], 
-        frames=0,
-        dither=DITHER,
-        padding=PADDING, 
-        palletsize=PALLETSIZE, 
-        width=WIDTH, 
-        height=HEIGHT,
-        frame_duration=FRAME_DURATION, 
-        font_path=FONT_PATH,
-        font_size=FONT_SIZE):
-    
-    quoted_texts = []
-
-    # if this function is not called via commandline we need to parse movies
-    (ffmpeg_path, vlc_path, movies, slugs) = check_config(CONFIG_FILE)
-    
-    # get media info
-    movie = get_movie_by_slug(movie_slug, movies)
-
-    # make sure movie is present
-    print("make_gifs() moviepath = ", movie['movie_path'])
-    if not os.path.exists(movie['movie_path']):
-        raise Exception('Movie not found.')
-
-    # make sure subtitles are present
-    print("make_gifs() subtitlesPath = ", movie['subtitle_path'])
-    if not os.path.exists(movie['subtitle_path']):
-        raise Exception('Subtitles not found.')
-
-    # Check if the output directory exists
-    output_dir = 'output'
+def generate_gifs(movie_path, subtitle_path, output_dir='/mnt/x/28dayslatergifs/', interval=5, start_time_str="00:00:00", max_filesize=None, debug=False):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # read in the quotes for the selected movie
-    subs = pysrt.open(movie['subtitle_path'])
-    font = ImageFont.truetype(font_path, font_size)
+    if not os.path.exists(SCREENCAP_PATH):
+        os.makedirs(SCREENCAP_PATH)
 
-    print(f"Total of {len(subs)} subtitle quotes found.")
+    # Clear the screencaps folder
+    for file in os.listdir(SCREENCAP_PATH):
+        file_path = os.path.join(SCREENCAP_PATH, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
-    # Iterate from zero to end_value
-    for i in range(len(subs)):  # Add 1 to end_value to include end_value itself
-        print(f"\n{i}")
+    font_path = os.path.join(os.path.dirname(__file__), FONT_PATH)
+    subs = pysrt.open(subtitle_path)
+    font = ImageFont.truetype(font_path, FONT_SIZE)
 
-        # these are the frames that will be exported
-        images = []
-        meta = []
+    start_time = sum(int(x) * 60 ** i for i, x in enumerate(reversed(start_time_str.split(":"))))
+    duration = get_video_duration(movie_path)
+    for current_time in range(start_time, duration, interval):
+        end_time = min(current_time + interval, duration)
+        quote = get_quote(subs, current_time, end_time)
+        filename = os.path.join(output_dir, generate_filename(movie_path, current_time, end_time, quote))
+        create_gif(movie_path, current_time, end_time, quote, filename, font, max_filesize, debug)
 
-        # Check if the screencap directory exists
-        if not os.path.exists(SCREENCAP_PATH):
-            # If it doesn't exist, create the directory
-            os.makedirs(SCREENCAP_PATH)
-        else:
-            # If it exists, remove all files in the directory
-            file_list = os.listdir(SCREENCAP_PATH)
-            for file_name in file_list:
-                os.remove(os.path.join(SCREENCAP_PATH, file_name))
+def get_video_duration(movie_path):
+    result = subprocess.run(
+        [ffmpeg_path, '-i', movie_path, '-hide_banner'],
+        stderr=subprocess.PIPE, universal_newlines=True
+    )
+    match = re.search(r"Duration: (\d+):(\d+):(\d+)\.(\d+)", result.stderr)
+    if match:
+        hours, minutes, seconds, _ = map(int, match.groups())
+        return hours * 3600 + minutes * 60 + seconds
+    return 0
 
-        # extract subtitle text
-        subtitle = subs[i]
-        text = striptags(subtitle.text).split("\n")
-        print("subtitle = ", subtitle)
+def get_quote(subs, start_time, end_time):
+    for sub in subs:
+        if sub.start.ordinal >= start_time * 1000 and sub.end.ordinal <= end_time * 1000:
+            return striptags(sub.text)
+    return ""
 
-        # Both ffmpeg and vlc write a lot of stuff to stdout, suppressing
-        FNULL = open(os.devnull, 'w')
+def generate_filename(movie_path, start_time, end_time, quote):
+    media_name = os.path.splitext(os.path.basename(movie_path))[0]
+    start_str = time.strftime('%H-%M-%S', time.gmtime(start_time))
+    end_str = time.strftime('%H-%M-%S', time.gmtime(end_time))
+    quote_str = re.sub(r'[^a-zA-Z0-9]', '', quote)[:30]
+    return f"{media_name}-Start[{start_str}]-End[{end_str}]-Quote[{quote_str}].gif"
 
-        print('using ffmpeg to extract images from quote for gif')
-        
-        # get padding from array
-        loop = 0
-        if isinstance(padding, (int, float)):
-            padding_left = padding
-            padding_right = padding
-        elif len(padding) == 2:
-            padding_left = padding[0]
-            padding_right = padding[1]
-        elif len(padding) >= (2 * loop + 2):
-            padding_left = padding[2 * loop]
-            padding_right = padding[2 * loop + 1]
-        elif len(padding) >= (2 * loop + 1):
-            padding_left = padding[2 * loop]
-            padding_right = padding[2 * loop]
-        else:
-            # this should not happen
-            padding_left = 0
-            padding_right = 0
 
-        # getting timespans for quote (begin and duration)
-        start = subtitle.start - pysrt.SubRipTime(0, 0, padding_left)
-        diff = subtitle.end - subtitle.start
+def create_gif(movie_path, start_time, end_time, quote, filename, font, max_filesize, debug):
+    images = []
+    duration = end_time - start_time
+    start_str = time.strftime('%H:%M:%S', time.gmtime(start_time))
 
-        print(f"SUBTITLES.START={subtitle.start} \nSTART = {start} \nsubtitle.END = {subtitle.end} \nDIFF={diff}")
+    subprocess.call([
+        ffmpeg_path, '-ss', start_str, '-i', movie_path, '-t', str(duration),
+        '-vf', f"scale={WIDTH}:{HEIGHT}", '-pix_fmt', 'rgb24', '-r', f"{1 / FRAME_DURATION}", SCREENCAP_PATH + '/thumb%05d.png'
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-        duration = str(diff.seconds + (diff.milliseconds * 0.001) + padding_right)
-        start = str(start).replace(',', '.')
+    file_names = sorted(fn for fn in os.listdir(SCREENCAP_PATH) if fn.endswith('.png'))
+    for f in file_names:
+        image = Image.open(os.path.join(SCREENCAP_PATH, f)).convert("RGB")
+        draw = ImageDraw.Draw(image)
+        if quote:
+            text_bbox = font.getbbox(quote)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            x = (image.size[0] - text_width) / 2
+            y = image.size[1] - text_height - 10
+            draw_text(draw, image.size[0], image.size[1], quote, font)
+        images.append(image.resize((WIDTH, HEIGHT)))
 
-        print(f"GENERATE SCREENCAPS STARTING AT {start} and for {duration} duration")
+    imageio.mimsave(filename, [array(img) for img in images], palettesize=PALLETSIZE, duration=FRAME_DURATION)
 
-        # generate screencaps
+    # Log the initial file size
+    initial_filesize = os.path.getsize(filename)
+    print(f"Initial GIF size: {initial_filesize} bytes")
+
+    # Ensure the GIF does not exceed the specified maximum file size
+    if max_filesize:
+        max_filesize_bytes = int(max_filesize * 1024 * 1024)  # Convert MB to bytes
+        while os.path.getsize(filename) > max_filesize_bytes:
+            print(f"GIF size {os.path.getsize(filename)} exceeds limit of {max_filesize_bytes} bytes. Reducing resolution and retrying...")
+            reduce_resolution()
+            regenerate_gif(images, filename)
+            optimize_gif(filename, max_filesize_bytes, debug)
+
+    # Log details about the generated GIF
+    print(f"Generated GIF: {filename}")
+    print(f"Start Time: {start_str}")
+    print(f"End Time: {time.strftime('%H:%M:%S', time.gmtime(end_time))}")
+    print(f"Number of Frames: {len(images)}")
+    print(f"Frame Duration: {FRAME_DURATION} seconds")
+    print(f"FPS: {1 / FRAME_DURATION}")
+    print(f"Quote: {'Yes' if quote else 'No'}")
+    print(f"Output Filename: {filename}")
+
+def reduce_resolution():
+    global WIDTH, HEIGHT, PALLETSIZE
+    WIDTH = max(WIDTH // 2, 320)
+    HEIGHT = max(HEIGHT // 2, 180)
+    PALLETSIZE = max(PALLETSIZE // 2, 64)
+    print(f"New resolution: {WIDTH}x{HEIGHT}, Palettesize: {PALLETSIZE}")
+
+def regenerate_gif(images, filename):
+    imageio.mimsave(filename, [array(img.resize((WIDTH, HEIGHT))) for img in images], palettesize=PALLETSIZE, duration=FRAME_DURATION)
+
+def optimize_gif(filename, max_filesize_bytes, debug):
+    iteration = 1
+    temp_filename = filename.replace('.gif', f'_temp_{iteration}.gif')
+    subprocess.call([
+        ffmpeg_path, '-i', filename, '-vf', f"scale={WIDTH}:{HEIGHT}", '-pix_fmt', 'rgb24', '-r', f"{1 / FRAME_DURATION}", '-fs', str(max_filesize_bytes), temp_filename
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+    while os.path.getsize(temp_filename) > max_filesize_bytes:
+        iteration += 1
+        new_temp_filename = filename.replace('.gif', f'_temp_{iteration}.gif')
         subprocess.call([
-            ffmpeg_path,
-            '-ss',
-            start,
-            '-i',
-            movie['movie_path'],
-            '-t',
-            duration,
-            '-s',
-            '{}x{}'.format(width, height),
-            SCREENCAP_PATH + '/thumb%05d.png'],
-            stdout=FNULL, stderr=subprocess.STDOUT)
-        
-        # Generating images done
-        file_names = sorted((fn for fn in os.listdir(SCREENCAP_PATH)))
-        if not file_names:
-            print('no images generated, aborting.')
-            return
-        print('generated {} images.'.format(len(file_names)))
+            ffmpeg_path, '-i', temp_filename, '-vf', f"scale={WIDTH}:{HEIGHT}", '-pix_fmt', 'rgb24', '-r', f"{1 / FRAME_DURATION}", '-fs', str(max_filesize_bytes), new_temp_filename
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        if os.path.getsize(new_temp_filename) <= max_filesize_bytes:
+            if debug:
+                print(f"Optimization iteration {iteration}: {new_temp_filename} (size: {os.path.getsize(new_temp_filename)} bytes)")
+            os.replace(new_temp_filename, filename)
+            break
+        else:
+            if debug:
+                print(f"Optimization iteration {iteration}: {new_temp_filename} (size: {os.path.getsize(new_temp_filename)} bytes)")
+            os.remove(temp_filename)
+            temp_filename = new_temp_filename
 
-        # Add quote to images
-        for f in file_names[::dither]:
-            try:
-                image = Image.open(os.path.join(SCREENCAP_PATH, f))
-                draw = ImageDraw.Draw(image)
-                image_size = image.size
+    # Log the final file size
+    final_filesize = os.path.getsize(filename)
+    print(f"Final GIF size: {final_filesize} bytes")
 
-                # deal with multi-line quotes
-                try:
-                    if len(text) == 2:
-                        # at most 2?
-                        text_size = font.getsize(text[0])
-                        x = (image_size[0] / 2) - (text_size[0] / 2)
-                        y = image_size[1] - (2 * text_size[1]) - 8  # padding
-                        draw_text(draw, x, y, text[0], font)
-
-                        text_size = font.getsize(text[1])
-                        x = (image_size[0] / 2) - (text_size[0] / 2)
-                        y += text_size[1]
-                        draw_text(draw, x, y, text[1], font)
-                    else:
-                        text_size = font.getsize(text[0])
-                        x = (image_size[0] / 2) - (text_size[0] / 2)
-                        y = image_size[1] - text_size[1] - 8  # padding
-                        draw_text(draw, x, y, text[0], font)
-                except NameError:
-                    pass
-                # do nothing.
-
-                # if not all black?
-                if image.getbbox():
-                    # add it to the array
-                    images.append(array(image))
-                    if frames != 0 and len(images) == frames:
-                        # got all the frames we need - all done
-                        break
-                else:
-                    print('all black frame found.')
-            except IOError:
-                print('empty frame found.')
-        meta.append('{}: "{}" (index {}, {})'.format(
-            movie['title'], '\n'.join(text), i, subtitle.start))
-
-        # Create unique gif filename 
-        milliseconds = round(time.time() * 1000)
-        filename = f"{output_dir}/{i} {movie_slug} - {milliseconds}.gif"
-
-        # Create gif
-        print('selected {} images.'.format(len(images)))
-        print('\nGenerating gif with filename = ', filename)
-        imageio.mimsave(filename,
-                        images,
-                        palettesize=palletsize,
-                        duration=frame_duration,
-                        subrectangles=False,
-                        loop=0)  # Loop indefinitely
-        print('generated gif.')
-
-    return quoted_texts
+    # Clean up temp files
+    for file in os.listdir(os.path.dirname(filename)):
+        if file.startswith(os.path.basename(filename).replace('.gif', '_temp_')):
+            os.remove(os.path.join(os.path.dirname(filename), file))
 
 if __name__ == '__main__':
-    # read config (we need this for default-generation below)
-    (ffmpeg_path, vlc_path, movies, slugs) = check_config(CONFIG_FILE)
 
     parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        '--movie', type=str, metavar="MOVIE", nargs='*',
-        default=slugs,
-        help=('movie slug, space-separated (default: {})'.format(
-            ' '.join(slugs)
-        )))
-
-    parser.add_argument(
-        '--index', dest='index', type=int, nargs='*', default=[-1],
-        help='subtitle index (starts at 1)')
-
-    parser.add_argument(
-        '--subtitle', dest='subtitle', type=str, nargs='*', default=[""],
-        help='custom subtitle which will replace the actual subtitle')
-
-    parser.add_argument(
-        '--padding', dest='padding', type=float, nargs='*', default=PADDING,
-        help=('padding to put around the quote in seconds: "1" or "0.5 1"; '
-              'only up to two values are taken (default {})').format(PADDING))
-
-    parser.add_argument(
-        '--dither', dest='dither', type=int, nargs='?', default=DITHER,
-        help='throw out every X frame (default: {})'.format(DITHER))
-
-    parser.add_argument(
-        '--no-quote', dest='quote', action='store_false',
-        help=('this option will export the time between the end of this '
-              'subtitle index and the start of the next one, it might be '
-              'fairly long or broken (default: {})').format(True))
-    parser.set_defaults(quote=True)
-
-    parser.add_argument(
-        '--filename', type=str, nargs='?', default="star_wars.gif",
-        help='filename for the GIF (default: star_wars.gif)')
-
-    parser.add_argument(
-        '--palletsize', type=int, nargs='?', default=PALLETSIZE,
-        help='Rounded to the next power of 2 (default: {})'.format(PALLETSIZE))
-
-    parser.add_argument(
-        '--width', type=int, nargs='?', default=WIDTH,
-        help='width of the GIF (default: {})'.format(WIDTH))
-
-    parser.add_argument(
-        '--height', type=int, nargs='?', default=HEIGHT,
-        help='height of the GIF (default: {})'.format(HEIGHT))
-
-    parser.add_argument(
-        '--frame_duration', type=float, nargs='?', default=FRAME_DURATION,
-        help='duration each frame is shown in seconds (default: {})'.format(
-            FRAME_DURATION
-        ))
-
-    parser.add_argument(
-        '--frames', type=int, nargs='?', default=FRAMES,
-        help='how many frames to export; 0 = unlimited (default: {})'.format(
-            FRAMES
-        ))
-
-    parser.add_argument(
-        '--font_path', type=str, nargs='?', default=FONT_PATH,
-        help='path to font to use (default: {})'.format(
-            FONT_PATH
-        ))
-
-    parser.add_argument(
-        '--font_size', type=int, nargs='?', default=FONT_SIZE,
-        help='size to render font in (default: {})'.format(
-            FONT_SIZE
-        ))
-
-    parser.add_argument(
-        '--config', type=str, nargs='?', default=CONFIG_FILE,
-        help=('filename for the config, this only affects commandline ' +
-              'calls (default: {})').format(CONFIG_FILE))
-
-    # Parsing arguments
+    parser.add_argument('--movie', type=str, required=True, help='Path to the movie file')
+    parser.add_argument('--subtitles', type=str, required=True, help='Path to the subtitles file')
+    parser.add_argument('--output', type=str, default='/mnt/x/28dayslatergifs/', help='Output directory for GIFs')
+    parser.add_argument('--interval', type=int, default=5, help='Interval in seconds for GIF generation')
+    parser.add_argument('--startTime', type=str, default="00:00:00", help='Start time for GIF generation in hh:mm:ss format')
+    parser.add_argument('--maxFilesize', type=float, help='Maximum file size for the GIF in MB')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode to save each iteration of the optimization process')
     args = parser.parse_args()
-    CONFIG_FILE = args.config
 
-    make_gif_for_all_quotes(
-        random.choice(args.movie), 
-        sub_index=args.index
-        )
-
-    '''
-    # by default we create a random gif
-    make_gif_per_quote(random.choice(args.movie), sub_index=args.index, quote=args.quote,
-            filename=args.filename, frames=args.frames,
-            padding=args.padding, dither=args.dither,
-            width=args.width, height=args.height, palletsize=args.palletsize,
-            frame_duration=args.frame_duration, custom_subtitle=args.subtitle,
-            font_path=args.font_path, font_size=args.font_size,)
-    '''
+    generate_gifs(args.movie, args.subtitles, args.output, args.interval, args.startTime, args.maxFilesize, args.debug)

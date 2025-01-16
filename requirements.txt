@@ -1,13 +1,5 @@
-urwid
+imageio
 pysrt
+Pillow
 numpy
-pillow
-twython 
-python-tumblpy
-imageio
-random
-uuid
-imageio
-pysrt
-pillow==9.5.0
-ffmpeg
+ffmpeg-python
