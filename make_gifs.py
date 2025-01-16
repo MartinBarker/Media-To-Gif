@@ -120,7 +120,7 @@ def getDetails():
     #gifFilename = "sopranos_gif_" + str(uuid.uuid4()) + ".gif"
     #respText = make_gif_new(randomEpisodeLocation, subsLocation)
 
-def generate_gifs(movie_path, subtitle_path, output_dir='/mnt/x/28dayslatergifs/', interval=5, start_time_str="00:00:00", max_filesize=None, debug=False):
+def generate_gifs(movie_path, subtitle_path, output_dir='/mnt/x/28dayslatergifs/', interval=5, start_time_str="00:00:00", max_filesize=None, debug=False, random_times=False):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -134,12 +134,16 @@ def generate_gifs(movie_path, subtitle_path, output_dir='/mnt/x/28dayslatergifs/
             os.remove(file_path)
 
     font_path = os.path.join(os.path.dirname(__file__), FONT_PATH)
-    subs = pysrt.open(subtitle_path)
+    subs = pysrt.open(subtitle_path, encoding='iso-8859-1')  # Specify the correct encoding
     font = ImageFont.truetype(font_path, FONT_SIZE)
 
-    start_time = sum(int(x) * 60 ** i for i, x in enumerate(reversed(start_time_str.split(":"))))
     duration = get_video_duration(movie_path)
-    for current_time in range(start_time, duration, interval):
+    if random_times:
+        start_times = random.sample(range(0, duration, interval), duration // interval)
+    else:
+        start_times = range(sum(int(x) * 60 ** i for i, x in enumerate(reversed(start_time_str.split(":")))), duration, interval)
+
+    for current_time in start_times:
         end_time = min(current_time + interval, duration)
         quote = get_quote(subs, current_time, end_time)
         filename = os.path.join(output_dir, generate_filename(movie_path, current_time, end_time, quote))
@@ -271,6 +275,7 @@ if __name__ == '__main__':
     parser.add_argument('--startTime', type=str, default="00:00:00", help='Start time for GIF generation in hh:mm:ss format')
     parser.add_argument('--maxFilesize', type=float, help='Maximum file size for the GIF in MB')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode to save each iteration of the optimization process')
+    parser.add_argument('--randomTimes', action='store_true', help='Generate GIFs from different random start times')
     args = parser.parse_args()
 
-    generate_gifs(args.movie, args.subtitles, args.output, args.interval, args.startTime, args.maxFilesize, args.debug)
+    generate_gifs(args.movie, args.subtitles, args.output, args.interval, args.startTime, args.maxFilesize, args.debug, args.randomTimes)
