@@ -81,7 +81,7 @@ The script requires `ffmpeg` to be installed on your system. Follow the instruct
     ```
 Example:
 ```sh
-python make_gifs.py --movie "/mnt/f/Virtuosity (1995) [Denzel Washington] 1080p BluRay H264 DolbyD 5.1 + nickarad/Virtuosity (1995) 1080p BluRay H264 DolbyD 5.1 + nickarad.mp4" --subtitles "/mnt/f/Virtuosity (1995) [Denzel Washington] 1080p BluRay H264 DolbyD 5.1 + nickarad/Virtuosity (1995) 1080p BluRay H264 DolbyD 5.1 + nickarad.srt" --output /mnt/x/virtuositygifs --interval 5 --randomTimes --maxFilesize 15
+python make_gifs.py --movie "media/28 Days Later (2002)/28.Days.Later.2002.720p.mp4" --subtitles "media/28 Days Later (2002)/28.Days.Later.2002.Subtitles.srt" --output /mnt/x/28dayslatergifs --interval 5 --startTime 01:22:23 --maxFilesize 15mb
 ```
 
 The script will generate GIFs and save them in the specified output folder.
